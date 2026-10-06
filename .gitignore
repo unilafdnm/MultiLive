@@ -1,0 +1,39 @@
+# Qt Creator
+*.pro.user
+*.pro.user.*
+*.autosave
+
+# qmake / build outputs
+build/
+build-*/
+debug/
+release/
+Makefile
+Makefile.*
+.qmake.stash
+
+# Generated files
+*.o
+*.obj
+*.exe
+*.dll
+*.a
+*.lib
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# IDE
+.vscode/
+.idea/
+.vs/
+
+# Local dependency configuration
+config.pri
+.env
+.env.*
+!.env.example
+
+# OS
+Thumbs.db
+.DS_Store

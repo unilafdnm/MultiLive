@@ -1,0 +1,2 @@
+# Copy this file to config.pri and update the path for your machine.
+FFMPEG_ROOT = C:/path/to/ffmpeg
