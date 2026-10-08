@@ -1,9 +1,8 @@
 #include "accencoder.h"
-#include"multipublisher.h"
 #include<QDebug>
 accencoder::accencoder(QObject *parent) : QObject(parent),_codec_ctx(nullptr)
   ,_swr_ctx(nullptr),_fifo(nullptr),_packet(nullptr),_frame(nullptr),_output_ctx(nullptr),
-    _pts(0),_initialized(false),_publisher(nullptr),_nextpts(0),_ptsInitialized(false)
+    _pts(0),_initialized(false),_sink(nullptr),_nextpts(0),_ptsInitialized(false)
 {
 
 }
@@ -79,8 +78,8 @@ bool accencoder::init(int inputSampleRate, const AVChannelLayout &inputChannelLa
 
     _pts=0;
     _initialized=true;
-    if(_publisher){
-        _publisher->setAudioEncoder(_codec_ctx);
+    if(_sink){
+        _sink->onEncoderReady(MediaType::Audio,_codec_ctx);
     }
 
     return true;
@@ -214,9 +213,9 @@ void accencoder::close()
 
 }
 
-void accencoder::setPublisher(MultiPublisher *publisher)
+void accencoder::setPacketSink(EncodePacketSink *sink)
 {
-    _publisher=publisher;
+    _sink=sink;
 }
 
 void accencoder::encodeFrame()
@@ -248,8 +247,12 @@ void accencoder::writePackers()
             return;
         }
 
-        if(_publisher){
-            _publisher->writeAudioPacket(_packet,_codec_ctx->time_base);
+        if(_sink){
+            EncodePacket packet;
+            packet.type=MediaType::Audio;
+            packet.packet=_packet;
+            packet.timeBase=_codec_ctx->time_base;
+            _sink->onEncoderPacket(packet);
         }
         av_packet_unref(_packet);
     }

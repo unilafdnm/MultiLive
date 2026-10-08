@@ -1,6 +1,6 @@
 #include "microphoneCapture.h"
 #include "accencoder.h"
-#include"multipublisher.h"
+#include"encodepacket.h"
 #include"liveclock.h"
 #include <iostream>
 #include<QDebug>
@@ -14,7 +14,7 @@ extern "C"
 #include <libavutil/channel_layout.h>
 }
 MicrophoneCapture::MicrophoneCapture(QObject* parent)
-    :_running(false),QObject(parent),_clock(nullptr),_publisher(nullptr)
+    :_running(false),QObject(parent),_clock(nullptr),_sink(nullptr)
 {
 
 }
@@ -51,11 +51,11 @@ void MicrophoneCapture::stop()
 
 }
 
-void MicrophoneCapture::setPublisher(MultiPublisher *publisher)
+void MicrophoneCapture::setPacketSink(EncodePacketSink *sink)
 {
-    _publisher=publisher;
-
+    _sink=sink;
 }
+
 
 void MicrophoneCapture::setClock(LiveClock *clock)
 {
@@ -134,8 +134,7 @@ void MicrophoneCapture::captureLoop(std::string microphoneName,const StreamConfi
     AVPacket* packet=av_packet_alloc();
     AVFrame* frame=av_frame_alloc();
 
-    qDebug()<<_publisher;
-    _encoderThread.start(config,_publisher);
+    _encoderThread.start(config,_sink);
 
 
     int frame_count=0;
@@ -163,9 +162,9 @@ void MicrophoneCapture::captureLoop(std::string microphoneName,const StreamConfi
 
             frame_count++;
             const char* formatName=av_get_sample_fmt_name(static_cast<AVSampleFormat>(frame->format));
-            std::cout<<"audio frame:"<<frame_count<<" samples="<<frame->nb_samples<<" sample_rate"<<
-                       frame->sample_rate<<" channels:"<<frame->ch_layout.nb_channels<<" format:"<<
-                       formatName<<std::endl;
+//            std::cout<<"audio frame:"<<frame_count<<" samples="<<frame->nb_samples<<" sample_rate"<<
+//                       frame->sample_rate<<" channels:"<<frame->ch_layout.nb_channels<<" format:"<<
+//                       formatName<<std::endl;
         }
 
         av_packet_unref(packet);

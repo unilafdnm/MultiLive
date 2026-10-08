@@ -1,4 +1,4 @@
-QT       += core gui multimedia
+QT       += core gui multimedia network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -42,6 +42,7 @@ SOURCES += \
     audioencoderthread.cpp \
     audioframequeue.cpp \
     cameracapture.cpp \
+    h264decoder.cpp \
     h264encoder.cpp \
     liveclock.cpp \
     main.cpp \
@@ -50,6 +51,9 @@ SOURCES += \
     multipublisher.cpp \
     networkpublisher.cpp \
     outputtargetparser.cpp \
+    realtimesession.cpp \
+    rtpreceiver.cpp \
+    rtpsender.cpp \
     screencapture.cpp \
     videoencoderthread.cpp \
     videoframequeue.cpp
@@ -60,6 +64,8 @@ HEADERS += \
     audioencoderthread.h \
     audioframequeue.h \
     cameracapture.h \
+    encodepacket.h \
+    h264decoder.h \
     h264encoder.h \
     liveclock.h \
     mainwindow.h \
@@ -68,6 +74,9 @@ HEADERS += \
     networkpublisher.h \
     outputtargetparser.h \
     outputtypes.h \
+    realtimesession.h \
+    rtpreceiver.h \
+    rtpsender.h \
     screencapture.h \
     videoencoderthread.h \
     videoframequeue.h

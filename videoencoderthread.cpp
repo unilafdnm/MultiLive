@@ -1,8 +1,8 @@
 #include "videoencoderthread.h"
 #include"h264encoder.h"
-#include"multipublisher.h"
+#include"encodepacket.h"
 VideoEncoderThread::VideoEncoderThread()
-    :_running(false),_publisher(nullptr)
+    :_running(false),_sink(nullptr)
 {
 
 }
@@ -12,7 +12,7 @@ VideoEncoderThread::~VideoEncoderThread()
     stop();
 }
 
-bool VideoEncoderThread::start(const StreamConfig &config, MultiPublisher *publisher)
+bool VideoEncoderThread::start(const StreamConfig &config,EncodePacketSink* sink)
 {
     if(_running){
         return false;
@@ -22,7 +22,7 @@ bool VideoEncoderThread::start(const StreamConfig &config, MultiPublisher *publi
     }
 
     _config=config;
-    _publisher=publisher;
+    _sink=sink;
     _running=true;
     _queue.reset();
     _thread=std::thread(&VideoEncoderThread::workerLoop,this);
@@ -55,7 +55,7 @@ void VideoEncoderThread::workerLoop()
 {
     VideoFrameItem item;
     H264Encoder encoder;
-    encoder.setPublisher(_publisher);
+    encoder.setPacketSink(_sink);
     bool initialiezd=false;
 
 

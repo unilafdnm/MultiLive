@@ -1,7 +1,8 @@
 #include "audioencoderthread.h"
 #include"accencoder.h"
+#include"encodepacket.h"
 AudioEncoderThread::AudioEncoderThread()
-    :_running(false),_publisher(nullptr)
+    :_running(false),_sink(nullptr)
 {
 
 }
@@ -13,7 +14,7 @@ AudioEncoderThread::~AudioEncoderThread()
 
 }
 
-bool AudioEncoderThread::start(const StreamConfig &config, MultiPublisher *publisher)
+bool AudioEncoderThread::start(const StreamConfig &config,EncodePacketSink* sink)
 {
     if(_running){
         return false;
@@ -26,7 +27,7 @@ bool AudioEncoderThread::start(const StreamConfig &config, MultiPublisher *publi
 
 
     _config=config;
-    _publisher=publisher;
+    _sink=sink;
     _running=true;
     _queue.reset();
     _thread=std::thread(&AudioEncoderThread::workerLoop,this);
@@ -56,7 +57,7 @@ void AudioEncoderThread::workerLoop()
 {
     accencoder encoder;
     bool initialized=false;
-    encoder.setPublisher(_publisher);
+    encoder.setPacketSink(_sink);
     AudioFrameItem item;
 
     while(_running && _queue.pop(item)){

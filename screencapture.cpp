@@ -1,6 +1,6 @@
 #include "screencapture.h"
 
-#include"multipublisher.h"
+#include"encodepacket.h"
 #include"liveclock.h"
 #include"h264encoder.h"
 
@@ -16,7 +16,7 @@ extern "C"{
 }
 
 ScreenCapture::ScreenCapture(QObject *parent) : QObject(parent)
-  ,_running(false),_clock(nullptr),_publisher(nullptr)
+  ,_running(false),_clock(nullptr),_sink(nullptr)
 {
 
 }
@@ -66,9 +66,9 @@ void ScreenCapture::setClock(LiveClock *clock)
     _clock=clock;
 }
 
-void ScreenCapture::setPublisher(MultiPublisher *publisher)
+void ScreenCapture::setPacketSink(EncodePacketSink *sink)
 {
-    _publisher=publisher;
+    _sink=sink;
 }
 
 bool ScreenCapture::getRunning()
@@ -159,7 +159,7 @@ void ScreenCapture::captureLoop(const StreamConfig& config)
 
     AVPacket* packet=av_packet_alloc();
     AVFrame* frame=av_frame_alloc();
-    _encoderThread.start(config,_publisher);
+    _encoderThread.start(config,_sink);
 
 
     while(_running){

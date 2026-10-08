@@ -11,6 +11,9 @@
 #include <QDebug>
 #include"liveclock.h"
 #include"StreamConfig.h"
+#include "realtimesession.h"
+#include"rtpreceiver.h"
+#include"h264decoder.h"
 extern "C"
 {
 #include <libavutil/avutil.h>
@@ -61,9 +64,12 @@ private:
     CameraCapture* _cameracapture;
     MicrophoneCapture* _microphonecapture;
     MultiPublisher* _publishers;
+    realtimesession _realtimeSession;
     LiveClock _liveClock;
     ScreenCapture* _screencapture;
     LiveState _liveState;
+    RtpReceiver _rtpReceiver;
+    H264Decoder _h264Decoder;
 
     QTimer _statsTimer;
     QElapsedTimer _statsElapsedTimer;

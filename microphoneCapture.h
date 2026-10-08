@@ -7,7 +7,7 @@
 #include<string>
 #include"StreamConfig.h"
 #include"audioencoderthread.h"
-class MultiPublisher;
+class EncodePacketSink;
 class LiveClock;
 
 class MicrophoneCapture:public QObject
@@ -19,7 +19,7 @@ public:
 
     void start(const std::string& microphoneName,const StreamConfig& config);
     void stop();
-    void setPublisher(MultiPublisher* publisher);
+    void setPacketSink(EncodePacketSink* sink);
     void setClock(LiveClock* clock);
 
 private:
@@ -29,7 +29,7 @@ private:
 private:
     std::atomic<bool> _running;
     std::thread _captureThread;
-    MultiPublisher* _publisher;
+    EncodePacketSink* _sink;
     LiveClock* _clock;
     AudioEncoderThread _encoderThread;
 

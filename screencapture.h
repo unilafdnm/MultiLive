@@ -7,7 +7,7 @@
 #include"StreamConfig.h"
 #include"videoencoderthread.h"
 class LiveClock;
-class MultiPublisher;
+class EncodePacketSink;
 
 
 class ScreenCapture : public QObject
@@ -19,7 +19,8 @@ public:
     void start(const StreamConfig& config);
     void stop();
     void setClock(LiveClock* clock);
-    void setPublisher(MultiPublisher* publisher);
+
+    void setPacketSink(EncodePacketSink* sink);
     bool getRunning();
 
 
@@ -30,7 +31,7 @@ private:
 private:
     std::atomic<bool> _running;
     std::thread _captureThread;
-    MultiPublisher* _publisher;
+    EncodePacketSink* _sink;
     LiveClock* _clock;
     VideoEncoderThread _encoderThread;
 

@@ -3,11 +3,11 @@
 
 #include"StreamConfig.h"
 #include"videoframequeue.h"
+
 #include<atomic>
 #include<thread>
 
-
-class MultiPublisher;
+class EncodePacketSink;
 
 
 class VideoEncoderThread
@@ -15,7 +15,7 @@ class VideoEncoderThread
 public:
     VideoEncoderThread();
     ~VideoEncoderThread();
-    bool start(const StreamConfig& config,MultiPublisher* publisher);
+    bool start(const StreamConfig& config,EncodePacketSink* sink);
 
     bool submit(const AVFrame* frame,int64_t timestampUs);
     void stop();
@@ -28,7 +28,7 @@ private:
     std::thread _thread;
     VideoFrameQueue _queue;
     StreamConfig _config;
-    MultiPublisher* _publisher;
+    EncodePacketSink* _sink;
 };
 
 #endif // VIDEOENCODERTHREAD_H

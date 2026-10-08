@@ -5,13 +5,13 @@
 #include<string>
 #include<cstdio>
 #include"StreamConfig.h"
+#include"realtimesession.h"
 extern "C"{
 #include<libavcodec/avcodec.h>
 #include<libswscale/swscale.h>
 
 }
 
-class MultiPublisher;
 
 class H264Encoder : public QObject
 {
@@ -22,7 +22,7 @@ public:
     bool init(int inputwidth,int inputheight,AVPixelFormat inputformat,const StreamConfig& config);
     void encode(AVFrame* frame,int64_t timestampUs);
     void close();
-    void setPublisher(MultiPublisher* publisher);
+    void setPacketSink(EncodePacketSink* sink);
 
 
 private:
@@ -30,9 +30,11 @@ private:
     SwsContext* _sws_ctx;
     AVFrame* _frame;
     AVPacket* _packet;
-    MultiPublisher* _publisher;
     FILE* _file;
     int64_t _lastPts;
+    EncodePacketSink* _sink;
+
+
     bool _initialized;
 
 signals:

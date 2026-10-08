@@ -1,5 +1,5 @@
 #include "cameracapture.h"
-#include"multipublisher.h"
+#include"encodepacket.h"
 #include"liveclock.h"
 #include<QDebug>
 #include<iostream>
@@ -12,7 +12,7 @@ extern "C"
 #include<libswscale/swscale.h>
 }
 CameraCapture::CameraCapture(QObject* parent)
-    :_running(false),QObject(parent),_clock(nullptr),_publisher(nullptr)
+    :_running(false),QObject(parent),_clock(nullptr),_sink(nullptr)
 {
 
 }
@@ -52,11 +52,11 @@ void CameraCapture::stop()
     _encoderThread.stop();
 }
 
-void CameraCapture::setPublisher(MultiPublisher *publisher)
+void CameraCapture::setPacketSink(EncodePacketSink *sink)
 {
-    _publisher=publisher;
-
+    _sink=sink;
 }
+
 
 void CameraCapture::setClock(LiveClock *clock)
 {
@@ -163,7 +163,7 @@ void CameraCapture::captureLoop(std::string cameraName,const StreamConfig& confi
     int frameCount=0;
     SwsContext* sws_ctx=nullptr;
 
-    _encoderThread.start(config,_publisher);
+    _encoderThread.start(config,_sink);
 
     while(_running){
 

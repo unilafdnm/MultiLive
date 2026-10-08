@@ -1,5 +1,4 @@
 #include "h264encoder.h"
-#include"multipublisher.h"
 #include <iostream>
 #include<QDebug>
 extern "C"
@@ -10,7 +9,8 @@ extern "C"
 
 
 H264Encoder::H264Encoder(QObject *parent) : QObject(parent),_codec_ctx(nullptr),_sws_ctx(nullptr)
-    ,_frame(nullptr),_packet(nullptr),_lastPts(AV_NOPTS_VALUE),_initialized(false),_file(nullptr),_publisher(nullptr)
+    ,_frame(nullptr),_packet(nullptr),_lastPts(AV_NOPTS_VALUE),_initialized(false),_file(nullptr)
+    ,_sink(nullptr)
 {
 
 }
@@ -51,6 +51,8 @@ bool H264Encoder::init(int inputwidth, int inputheight, AVPixelFormat inputforma
         const std::string preset=config.preset.empty()?std::string("veryfast"):config.preset;
         av_opt_set(_codec_ctx->priv_data,"preset",preset.c_str(),0);
         av_opt_set(_codec_ctx->priv_data,"tune","zerolatency",0);
+        av_opt_set(_codec_ctx->priv_data,"x264-params","repeat-headers=1",0);
+
     }
 
     _codec_ctx->flags|=AV_CODEC_FLAG_GLOBAL_HEADER;
@@ -75,8 +77,8 @@ bool H264Encoder::init(int inputwidth, int inputheight, AVPixelFormat inputforma
     _lastPts=AV_NOPTS_VALUE;
     _initialized=true;
 
-    if(_publisher){
-        _publisher->setVideoEncoder(_codec_ctx);
+    if(_sink){
+        _sink->onEncoderReady(MediaType::Video,_codec_ctx);
     }
 
     return true;
@@ -113,9 +115,13 @@ void H264Encoder::encode(AVFrame *frame,int64_t timestampUs)
             qDebug()<<"receive packet failed";
             break;
         }
-        std::cout<<"H264 packet size="<<_packet->size<<" pts="<<_packet->pts<<std::endl;
-        if(_publisher){
-            _publisher->writeVideoPacket(_packet,_codec_ctx->time_base);
+       //std::cout<<"H264 packet size="<<_packet->size<<" pts="<<_packet->pts<<std::endl;
+        if(_sink){
+            EncodePacket packet;
+            packet.type=MediaType::Video;
+            packet.packet=_packet;
+            packet.timeBase=_codec_ctx->time_base;
+            _sink->onEncoderPacket(packet);
         }
 
         av_packet_unref(_packet);
@@ -141,8 +147,12 @@ void H264Encoder::close()
                     break;
                 }
 
-                if(_publisher){
-                    _publisher->writeVideoPacket(_packet,_codec_ctx->time_base);
+                if(_sink){
+                    EncodePacket packet;
+                    packet.type=MediaType::Video;
+                    packet.packet=_packet;
+                    packet.timeBase=_codec_ctx->time_base;
+                    _sink->onEncoderPacket(packet);
                 }
                 av_packet_unref(_packet);
             }
@@ -164,8 +174,8 @@ void H264Encoder::close()
     _lastPts=AV_NOPTS_VALUE;
 }
 
-void H264Encoder::setPublisher(MultiPublisher *publisher)
+void H264Encoder::setPacketSink(EncodePacketSink(* sink))
 {
-    _publisher=publisher;
+    _sink=sink;
 
 }

@@ -4,6 +4,8 @@
 #include <QObject>
 #include<string>
 #include"StreamConfig.h"
+#include"realtimesession.h"
+
 extern "C"{
 #include<libavcodec/avcodec.h>
 #include<libavformat/avformat.h>
@@ -24,8 +26,7 @@ public:
     bool init(int inputSampleRate,const AVChannelLayout& inputChannelLayout,AVSampleFormat inputFormat,const StreamConfig& config);
     void encode(AVFrame* frame,int64_t timestampUs);
     void close();
-    void setPublisher(MultiPublisher* publisher);
-
+    void setPacketSink(EncodePacketSink* sink);
 private:
     void encodeFrame();
     void writePackers();
@@ -37,7 +38,9 @@ private:
     AVPacket* _packet;
     AVFormatContext* _output_ctx;
     AVStream* _output_stream;
-    MultiPublisher* _publisher;
+
+    EncodePacketSink* _sink;
+
     int64_t _pts;
     int64_t _nextpts;
     bool _ptsInitialized;

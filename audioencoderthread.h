@@ -9,7 +9,7 @@ extern "C"{
 
 }
 
-class MultiPublisher;
+class EncodePacketSink;
 
 
 class AudioEncoderThread
@@ -17,7 +17,7 @@ class AudioEncoderThread
 public:
     AudioEncoderThread();
     ~AudioEncoderThread();
-    bool start(const StreamConfig& config,MultiPublisher* publisher);
+    bool start(const StreamConfig& config,EncodePacketSink* sink);
     void stop();
     bool submit(const AVFrame* frame,int64_t timestampUs);
 
@@ -30,7 +30,7 @@ private:
     std::thread _thread;
     std::atomic<bool> _running;
     StreamConfig _config;
-    MultiPublisher* _publisher;
+    EncodePacketSink* _sink;
 
 };
 

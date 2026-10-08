@@ -6,6 +6,7 @@
 #include"screencapture.h"
 #include"outputtypes.h"
 #include"outputtargetparser.h"
+
 #include<QMessageBox>
 #include<QComboBox>
 #include <QDebug>
@@ -53,8 +54,60 @@ MainWindow::MainWindow(QWidget *parent)
     ,_microphonecapture(new MicrophoneCapture(this))
     ,_publishers(new MultiPublisher())
     ,_screencapture(new ScreenCapture(this))
+    ,_realtimeSession(_publishers)
+    ,_h264Decoder()
     ,_liveState(LiveState::Idle)
 {
+
+    _cameracapture->setPacketSink(
+        &_realtimeSession
+    );
+
+    _screencapture->setPacketSink(
+        &_realtimeSession
+    );
+
+    _microphonecapture->setPacketSink(
+        &_realtimeSession
+    );
+    _realtimeSession.startVideoRtp(
+        "127.0.0.1",
+        5004
+    );
+    if(!_h264Decoder.open()){
+        qDebug()<<"open H264 decoder failed";
+    }
+
+
+    connect(&_rtpReceiver,&RtpReceiver::h264NaluReady,this,
+        [this](QByteArray nalu,quint32 timestamp,bool marker){
+            if (nalu.size() < 5) {
+                return;
+            }
+//            uint8_t header =static_cast<uint8_t>(nalu[4]);
+//            int type =header & 0x1F;
+//            qDebug()<< "Receive complete NALU:"<< "type="<< type<< "size="<< nalu.size()<< "timestamp="<< timestamp<< "marker="<< marker;
+              _h264Decoder.pushNalu(nalu,timestamp,marker);
+
+        }
+    );
+
+    connect(&_h264Decoder,&H264Decoder::frameReady,this,[this](const QImage& image){
+        ui->previewLabel->setPixmap(
+            QPixmap::fromImage(image).scaled(ui->previewLabel->size(),Qt::KeepAspectRatio,Qt::SmoothTransformation)
+        );
+    });
+
+    if (!_rtpReceiver.start(5004)) {
+        qDebug()
+            << "start RTP receiver failed";
+    }
+
+    _realtimeSession.startVideoRtp(
+        "127.0.0.1",
+        5004
+    );
+
     ui->setupUi(this);
     //枚举添加摄像头
     const QList<QCameraInfo> cameras=QCameraInfo::availableCameras();
@@ -133,7 +186,6 @@ MainWindow::MainWindow(QWidget *parent)
 
         _liveClock.start();
         _screencapture->setClock(&_liveClock);
-        _screencapture->setPublisher(_publishers);
         _screencapture->start(getStreamConfig());
 
     });
@@ -205,7 +257,6 @@ MainWindow::MainWindow(QWidget *parent)
             }
             _liveClock.start();
             _cameracapture->setClock(&_liveClock);
-            _cameracapture->setPublisher(_publishers);
             _cameracapture->start(selectCamera.toStdString(),getStreamConfig());
         }
         else if(_selectdevice == "屏幕"){
@@ -214,11 +265,9 @@ MainWindow::MainWindow(QWidget *parent)
             }
             _liveClock.start();
             _screencapture->setClock(&_liveClock);
-            _screencapture->setPublisher(_publishers);
             _screencapture->start(getStreamConfig());
         }
        _microphonecapture->setClock(&_liveClock);
-       _microphonecapture->setPublisher(_publishers);
        _microphonecapture->start(selectMicrophone.toStdString(),getStreamConfig());
     });
 
