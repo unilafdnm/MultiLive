@@ -79,6 +79,28 @@ bool AacDecoder::open(int sampleRate, int channels)
 void AacDecoder::close()
 {
 
+    if(_swrCtx){
+        swr_free(&_swrCtx);
+    }
+    if (_frame) {
+       av_frame_free(&_frame);
+   }
+
+   if (_packet) {
+       av_packet_free(&_packet);
+   }
+
+   if (_codecCtx) {
+       avcodec_free_context(&_codecCtx);
+   }
+
+   av_channel_layout_uninit(
+       &_outputLayout
+   );
+
+   _sampleRate = 0;
+   _channels = 0;
+   _opened = false;
 }
 
 bool AacDecoder::decode(const uint8_t *data, size_t size, uint32_t timestamp)

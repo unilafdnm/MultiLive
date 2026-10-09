@@ -71,8 +71,9 @@ void H264Decoder::close()
     }
     if(_swsCtx){
         sws_free_context(&_swsCtx);
+        _swsCtx=nullptr;
     }
-    if(!_codecCtx){
+    if(_codecCtx){
         avcodec_free_context(&_codecCtx);
     }
     _accessUnitBuffer.clear();
@@ -149,7 +150,7 @@ void H264Decoder::decodeAccessUnit(const QByteArray &data, quint32 timestamp)
             qDebug()<<"decode H264 failed:"<<errorText;
             break;
         }
-        qDebug()<<"Decoded frame:"<<_frame->width<<"x"<<_frame->height<<" format="<<_frame->format<<" pts="<<_frame->pts;
+//        qDebug()<<"Decoded frame:"<<_frame->width<<"x"<<_frame->height<<" format="<<_frame->format<<" pts="<<_frame->pts;
         _swsCtx=sws_getCachedContext(_swsCtx,_frame->width,_frame->height,static_cast<AVPixelFormat>(_frame->format),
                                      _frame->width,_frame->height,AV_PIX_FMT_RGB24,SWS_BILINEAR,nullptr,nullptr,nullptr);
         if(!_swsCtx){
@@ -168,7 +169,7 @@ void H264Decoder::decodeAccessUnit(const QByteArray &data, quint32 timestamp)
 
         sws_scale(_swsCtx,_frame->data,_frame->linesize,0,_frame->height,dstData,dstLinesize);
 
-        emit frameReady(image);
+        emit frameReady(image,_frame->pts);
         av_frame_unref(_frame);
 
     }

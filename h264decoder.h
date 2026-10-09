@@ -36,7 +36,7 @@ private:
     bool _opened=false;
 
 signals:
-    void frameReady(const QImage& image);
+    void frameReady(const QImage& image,quint32 timestamp);
 };
 
 #endif // H264DECODER_H

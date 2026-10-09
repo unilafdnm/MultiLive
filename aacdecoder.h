@@ -36,7 +36,7 @@ private:
     AVCodecContext* _codecCtx=nullptr;
     AVPacket* _packet=nullptr;
     AVFrame* _frame=nullptr;
-    AVChannelLayout _outputLayout;
+    AVChannelLayout _outputLayout{};
     int _sampleRate=0;
     int _channels=0;
     bool _opened=false;

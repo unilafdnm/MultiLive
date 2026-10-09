@@ -70,12 +70,29 @@ MainWindow::MainWindow(QWidget *parent)
     _microphonecapture->setPacketSink(
         &_realtimeSession
     );
-    _realtimeSession.startVideoRtp(
-        "127.0.0.1",
-        5004
-    );
+
+
     if(!_h264Decoder.open()){
         qDebug()<<"open H264 decoder failed";
+    }
+    if (!_aacDecoder.open(48000, 2)) {
+        qWarning() << "open AAC decoder failed";
+    }
+
+    if (!_audioPlayer.open(48000, 2)) {
+        qWarning() << "open AudioPlayer failed";
+    }
+
+    _audioRtpReceiver.setAacCallback([this](std::vector<uint8_t> aac,uint32_t timestamp){
+        _aacDecoder.decode(aac.data(),aac.size(),timestamp);
+    });
+    _aacDecoder.setPcmCallback([this](std::vector<uint8_t> pcm,uint32_t timestamp){
+        Q_UNUSED(timestamp);
+        _audioPlayer.player(pcm.data(),pcm.size());
+    });
+
+    if (!_audioRtpReceiver.open(5006)) {
+        qWarning()<< "start Audio RTP receiver failed";
     }
 
 
@@ -84,19 +101,72 @@ MainWindow::MainWindow(QWidget *parent)
             if (nalu.size() < 5) {
                 return;
             }
-//            uint8_t header =static_cast<uint8_t>(nalu[4]);
-//            int type =header & 0x1F;
-//            qDebug()<< "Receive complete NALU:"<< "type="<< type<< "size="<< nalu.size()<< "timestamp="<< timestamp<< "marker="<< marker;
               _h264Decoder.pushNalu(nalu,timestamp,marker);
 
         }
     );
 
-    connect(&_h264Decoder,&H264Decoder::frameReady,this,[this](const QImage& image){
-        ui->previewLabel1->setPixmap(
-            QPixmap::fromImage(image).scaled(ui->previewLabel1->size(),Qt::KeepAspectRatio,Qt::SmoothTransformation)
-        );
+    connect(&_h264Decoder,&H264Decoder::frameReady,this,[this](const QImage& image,quint32 timestamp){
+        if(!_videoBaseSet){
+            _videoBaseTimestamp=timestamp;
+            _videoBaseSet=true;
+        }
+        qDebug()<<"111";
+        _videoSyncQueue.push_back({image,timestamp});
+
     });
+
+    _avSyncTimer.setInterval(5);
+
+
+    connect(&_avSyncTimer,&QTimer::timeout,this,[this](){
+
+        //这里的问题
+       if(_videoSyncQueue.empty()){
+           return ;
+       }
+       if(!_audioPlayer.started()){
+           return;
+       }
+       SyncVideoFrame& frame=_videoSyncQueue.front();
+
+       uint32_t videoDelta=frame.timestamp-_videoBaseTimestamp;
+
+       //H264 RTP Clock=90000Hz
+       int64_t videoUs=static_cast<int64_t>(videoDelta*1000000ULL/90000ULL);
+       int64_t audioUs=_audioPlayer.playedUs();
+       int64_t diffUs=videoUs-audioUs;
+       //视频比音频早30ms,暂时不显示
+       if(diffUs>30000){
+           qDebug() << "video early, wait:"
+                    << diffUs / 1000.0 << "ms";
+           return;
+       }
+       /*
+         视频已经落后超过 100ms
+         → 这帧没价值了
+        */
+       if(diffUs<-100000){
+           qDebug()<<"drop late video frame diff="<<diffUs/1000.0<<"ms";
+           _videoSyncQueue.pop_front();
+           return;
+       }
+       qDebug() << "display video:"
+                << diffUs / 1000.0 << "ms";
+       ui->previewLabel1->setPixmap(
+                   QPixmap::fromImage(
+                       frame.image
+                   ).scaled(
+                       ui->previewLabel1->size(),
+                       Qt::KeepAspectRatio,
+                       Qt::SmoothTransformation
+                   )
+               );
+
+               _videoSyncQueue.pop_front();
+
+    });
+
 
     if (!_rtpReceiver.start(5004)) {
         qDebug()
@@ -127,7 +197,7 @@ MainWindow::MainWindow(QWidget *parent)
     if(defaultCameraIndex >=0){
         ui->camerDeviceComboBox->setCurrentIndex(defaultCameraIndex);
     }
-//枚举添加麦克风
+    //枚举添加麦克风
     const QList<QAudioDeviceInfo> microphones=QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
     const QAudioDeviceInfo defaultMicrophoneName=QAudioDeviceInfo::defaultInputDevice();
     int defaultMicrophoneIndex=-1;
@@ -200,6 +270,16 @@ MainWindow::MainWindow(QWidget *parent)
         if (_liveState != LiveState::Idle && _liveState != LiveState::Error) {
             return;
         }
+
+        _realtimeSession.startVideoRtp(
+            "127.0.0.1",
+            5004
+        );
+        _realtimeSession.startAudioRtp(
+            "127.0.0.1",
+            5006
+        );
+            _avSyncTimer.start();
 
         bool outputAdded=false;
         _publishers->close();

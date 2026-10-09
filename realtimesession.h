@@ -3,6 +3,7 @@
 
 #include"encodepacket.h"
 #include"rtpsender.h"
+#include"audiortpsender.h"
 class MultiPublisher;
 
 
@@ -16,12 +17,13 @@ public:
 
     void stopRtp();
     bool startVideoRtp(const std::string& ip,uint16_t port);
-
+    bool startAudioRtp(const std::string& ip,uint16_t port);
 
 
 private:
-    MultiPublisher* _publisher;
-    rtpsender _rtpSender;
+    MultiPublisher* _publisher=nullptr;
+    rtpsender _videoRtpSender;
+    AudioRtpSender _audioRtpSender;
 
 };
 

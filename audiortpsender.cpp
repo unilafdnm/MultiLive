@@ -23,19 +23,17 @@ AudioRtpSender::~AudioRtpSender()
     close();
 }
 
-bool AudioRtpSender::open(const std::string &ip, uint16_t port, uint32_t sampleRate)
+bool AudioRtpSender::open(const std::string &ip, uint16_t port)
 {
     if(_opened){
         return true;
     }
     _remoteAddress=QHostAddress(QString::fromStdString(ip));
-    if(!_remoteAddress.isNull() || port ==0){
+    if(_remoteAddress.isNull() || port ==0){
         return false;
     }
     _remotePort=port;
-    _sampleRate=sampleRate;
 
-    _socket=new QUdpSocket();
     std::random_device rd;
 
     _sequence=static_cast<uint16_t>(rd());
@@ -48,10 +46,7 @@ bool AudioRtpSender::open(const std::string &ip, uint16_t port, uint32_t sampleR
 
 void AudioRtpSender::close()
 {
-    if(_socket){
-        delete  _socket;
-        _socket=nullptr;
-    }
+    _socket.close();
     _opened=false;
 }
 
@@ -60,86 +55,68 @@ bool AudioRtpSender::isOpen() const
     return _opened;
 }
 
-bool AudioRtpSender::sendAAC(const uint8_t* data, size_t size, uint32_t timestamp)
+
+bool AudioRtpSender::sendAAc(const AVPacket *packet, AVRational timeBase)
 {
-    if(!_opened || !data || size==0 || !_socket){
+    if(!_opened ||!packet || !packet->data||packet->size<=0){
         return false;
     }
-    /*
-           MPEG4-GENERIC：
 
-           RTP Payload:
+    int64_t pts=packet->pts;
+    if(pts == AV_NOPTS_VALUE){
+        pts=packet->dts;
+    }
+    if(pts==AV_NOPTS_VALUE){
+        qWarning()<<"AAC packet has no timestamp";
+        return false;
+    }
 
-           +--------------------+
-           | AU-headers-length  |  2 bytes
-           +--------------------+
-           | AU-header          |  2 bytes
-           +--------------------+
-           | AAC Access Unit    |
-           +--------------------+
-
-           所以额外需要 4 bytes。
-       */
+    int64_t mediaTimestamp=av_rescale_q(pts,timeBase,AVRational{1,static_cast<int>(_sampleRate)});
+    uint32_t timestamp=_timestampBase + static_cast<uint32_t>(mediaTimestamp);
 
     constexpr size_t AU_HEADER_SIZE=4;
-    if(size + AU_HEADER_SIZE >MAX_RTP_PAYLOAD){
-        qDebug()<<"AAC frame too large for one RTP packet";
+    const size_t aacSize=static_cast<size_t>(packet->size);
+
+    if(aacSize+AU_HEADER_SIZE >MAX_RTP_PAYLOAD){
+        qWarning()<<"AAC frame too large";
         return false;
     }
-    /*
-           MPEG4-GENERIC 常用配置：
 
-           sizeLength = 13
-           indexLength = 3
-
-           所以 AU-size 最大 13 bit。
-     */
-    if(size>0x1FFF){
-        qDebug()<<"AAC AU size exceeds 13 bits";
+    if(aacSize > 0x1FFF){
+        qWarning()<<"AAC AU size exceeds 13 bits";
         return false;
     }
-    std::vector<uint8_t> payload;
-    payload.resize(AU_HEADER_SIZE + size);
+    std::vector<uint8_t> payload(AU_HEADER_SIZE+aacSize);
 
-    /*
-           AU-headers-length
-           表示后面的 AU-header 总共有多少 bit。
-           这里只有一个：
-           AU-size  = 13 bit
-           AU-index = 3 bit
-           总共 = 16 bit
-           因此：0x0010
-    */
+    //AU-Header-length =16bits
     payload[0]=0x00;
     payload[1]=0x10;
 
-    //AU Header:13bit AU-size 3 bit AU-index
-    //AU-index=0 ACC size<<3
-    uint16_t auHeader=static_cast<uint16_t>(size<<3);
-    payload[2]=static_cast<uint8_t>(auHeader>>8);
-    payload[3]=static_cast<uint8_t>(auHeader&0xFF);
-    std::memcpy(payload.data()+AU_HEADER_SIZE,data,size);
+    //AU-Header AU-size:13bit AU-Index:3bit AU-Index=0
+    uint16_t auHeader = static_cast<uint16_t>(aacSize << 3);
 
-    //timestamp 参数是相对于媒体起点的时间,RTP实际时间戳增加随机base
-    uint32_t rtpTimestamp=_timestampBase+timestamp;
+    payload[2] = static_cast<uint8_t>(auHeader >> 8);
+    payload[3] = static_cast<uint8_t>(auHeader & 0xFF);
 
-    return sendRtpPacket(payload.data(),payload.size(),rtpTimestamp,true);
+    std::memcpy(payload.data()+AU_HEADER_SIZE,packet->data,aacSize);
+    return sendRtpPacket(payload.data(),payload.size(),timestamp,true);
 
+}
 
-
+void AudioRtpSender::setSampleRate(uint32_t sampleRate)
+{
+    if(sampleRate){
+        _sampleRate=sampleRate;
+    }
 
 }
 
 bool AudioRtpSender::sendRtpPacket(const uint8_t *data, size_t size, uint32_t timestamp, bool marker)
 {
-    if(!_opened || !_socket || !data||size==0){
+    if(!_opened ||!data||size==0){
         return false;
     }
 
-    if(_socket->thread() != QThread::currentThread()){
-        qWarning()<<"AudioRtpSender::sendRtpPacket called from wrong thread";
-        return false;
-    }
     constexpr size_t RTP_HEADER_SIZE=12;
     std::vector<uint8_t> packet;
     packet.resize(RTP_HEADER_SIZE+size);
@@ -166,14 +143,34 @@ bool AudioRtpSender::sendRtpPacket(const uint8_t *data, size_t size, uint32_t ti
 
     std::memcpy(packet.data()+RTP_HEADER_SIZE,data,size);
 
-    qint64 ret=_socket->writeDatagram(reinterpret_cast<const char*>(packet.data()),static_cast<qint64>(packet.size()),
-                                       _remoteAddress,_remotePort);
-    if(ret!=static_cast<qint64>(packet.size())){
-        qWarning()<<"Audio RTP send failed:"<<_socket->errorString();
-        return false;
-    }
+    /*
+       和视频 RTP 一样：
 
+       sendAAC() 是 AudioEncoderThread 调进来的，
 
+       QUdpSocket 属于创建它的 Qt 线程。
+
+       所以不要直接跨线程 writeDatagram。
+    */
+
+   QByteArray datagram(reinterpret_cast<const char*>(packet.data()),static_cast<int>(packet.size()));
+
+   QHostAddress address = _remoteAddress;
+   quint16 port = _remotePort;
+
+   bool queued = QMetaObject::invokeMethod(
+       &_socket,
+       [this, datagram, address, port]() {
+           qint64 ret =_socket.writeDatagram(datagram,address,port);
+           if (ret < 0) {
+               qWarning()<< "Audio RTP send failed:"<< _socket.errorString();
+           }
+       },
+       Qt::QueuedConnection
+   );
+   if (!queued) {
+       return false;
+   }
    ++_sequence;
 
    return true;

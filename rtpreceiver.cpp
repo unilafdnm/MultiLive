@@ -134,7 +134,7 @@ void RtpReceiver::handleDatagram(const QByteArray &datagram)
     }
 
     const uint8_t* payload=data+headerSize;
-    qDebug()<<"RTP: seq="<<sequence<<" timestamp="<<timestamp<<" market="<<market<<" payload="<<payloadSize;
+    //qDebug()<<"RTP: seq="<<sequence<<" timestamp="<<timestamp<<" market="<<market<<" payload="<<payloadSize;
     handleH264Payload(payload,payloadSize,sequence,timestamp,market);
 
 
@@ -178,7 +178,7 @@ void RtpReceiver::handleSingleNalu(const uint8_t *payload, int payloadSize, quin
 
     const uint8_t naluType=payload[0]&0x1F;
 
-    qDebug()<<"H264 Single Nalu: type="<<naluType<<" size="<<nalu.size();
+//    qDebug()<<"H264 Single Nalu: type="<<naluType<<" size="<<nalu.size();
     emit h264NaluReady(nalu,timestamp,market);
 
 

@@ -18,18 +18,19 @@ class AudioRtpSender
 public:
     AudioRtpSender();
     ~AudioRtpSender();
-    bool open(const std::string& ip,uint16_t port,uint32_t sampleRate=48000);
+    bool open(const std::string& ip,uint16_t port);
     void close();
     bool isOpen()const;
-    bool sendAAC(const uint8_t* data,size_t size,uint32_t timestamp);
 
+    bool sendAAc(const AVPacket* packet,AVRational timeBase);
+    void setSampleRate(uint32_t sampleRate);
 private:
     bool sendRtpPacket(const uint8_t* data,size_t size,uint32_t timestamp,bool marker);
 
 
 
 private:
-    QUdpSocket* _socket=nullptr;
+    QUdpSocket _socket;
     QHostAddress _remoteAddress;
     quint16 _remotePort=0;
 

@@ -13,41 +13,61 @@ void realtimesession::setPublisher(MultiPublisher *publisher)
 
 void realtimesession::onEncoderPacket(const EncodePacket &encoded)
 {
-    if(!_publisher || !encoded.packet){
+    if(!encoded.packet){
         return;
     }
-    if(encoded.type == MediaType::Video){
-        _publisher->writeVideoPacket(encoded.packet,encoded.timeBase);
-    }else if(encoded.type == MediaType::Audio){
-        _publisher->writeAudioPacket(encoded.packet,encoded.timeBase);
+
+    if(_publisher){
+        if(encoded.type == MediaType::Video){
+            _publisher->writeVideoPacket(encoded.packet,encoded.timeBase);
+        }else if(encoded.type == MediaType::Audio){
+            _publisher->writeAudioPacket(encoded.packet,encoded.timeBase);
+        }
+    }
+    //实时视频RTP
+    if(encoded.type == MediaType::Video && _videoRtpSender.isopen()){
+        _videoRtpSender.sendH264(encoded.packet,encoded.timeBase);
+    }
+    //实时音频RTP
+    if(encoded.type == MediaType::Audio && _audioRtpSender.isOpen()){
+        _audioRtpSender.sendAAc(encoded.packet,encoded.timeBase);
     }
 
-    if(encoded.type == MediaType::Video && _rtpSender.isopen()){
-        _rtpSender.sendH264(encoded.packet,encoded.timeBase);
-    }
 
 }
 
 void realtimesession::onEncoderReady(MediaType type, AVCodecContext *codecCtx)
 {
-    if(!_publisher || !codecCtx){
+    if(!codecCtx){
         return;
     }
 
-    if(type == MediaType::Video){
-        _publisher->setVideoEncoder(codecCtx);
-    }else if(type == MediaType::Audio){
-        _publisher->setAudioEncoder(codecCtx);
+    if(_publisher){
+        if(type == MediaType::Video){
+            _publisher->setVideoEncoder(codecCtx);
+        }else if(type == MediaType::Audio){
+            _publisher->setAudioEncoder(codecCtx);
+        }
+    }
+
+    if(type == MediaType::Audio){
+        _audioRtpSender.setSampleRate(codecCtx->sample_rate);
     }
 
 }
 
 void realtimesession::stopRtp()
 {
-    _rtpSender.close();
+    _videoRtpSender.close();
+    _audioRtpSender.close();
 }
 
 bool realtimesession::startVideoRtp(const std::string &ip, uint16_t port)
 {
-    return _rtpSender.open(ip,port);
+    return _videoRtpSender.open(ip,port);
+}
+
+bool realtimesession::startAudioRtp(const std::string &ip, uint16_t port)
+{
+    return _audioRtpSender.open(ip,port);
 }

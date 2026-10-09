@@ -6,7 +6,7 @@
 #include<vector>
 #include<string>
 #include<cstdint>
-
+#include<queue>
 #include <QMainWindow>
 #include <QDebug>
 #include"liveclock.h"
@@ -14,6 +14,10 @@
 #include "realtimesession.h"
 #include"rtpreceiver.h"
 #include"h264decoder.h"
+#include "audiortpreceiver.h"
+#include "aacdecoder.h"
+#include "audioplayer.h"
+
 extern "C"
 {
 #include <libavutil/avutil.h>
@@ -31,6 +35,11 @@ enum class LiveState{
     Stopping,
     Error
 
+};
+
+struct SyncVideoFrame{
+    QImage image;
+    quint32 timestamp=0;
 };
 
 
@@ -68,8 +77,21 @@ private:
     LiveClock _liveClock;
     ScreenCapture* _screencapture;
     LiveState _liveState;
+
+    //RTP视频
     RtpReceiver _rtpReceiver;
     H264Decoder _h264Decoder;
+
+    //RTP音频
+    AudioRtpReceiver _audioRtpReceiver;
+    AacDecoder _aacDecoder;
+    AudioPlayer _audioPlayer;
+
+    //音视频同步
+    std::deque<SyncVideoFrame> _videoSyncQueue;
+    QTimer _avSyncTimer;
+    bool _videoBaseSet{false};
+    quint32 _videoBaseTimestamp{0};
 
     QTimer _statsTimer;
     QElapsedTimer _statsElapsedTimer;
