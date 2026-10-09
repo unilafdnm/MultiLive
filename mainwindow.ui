@@ -509,7 +509,7 @@
       <property name="title">
        <string>视频预览</string>
       </property>
-      <layout class="QVBoxLayout" name="verticalLayout_4" stretch="4,1">
+      <layout class="QVBoxLayout" name="verticalLayout_4" stretch="0,0,1">
        <property name="spacing">
         <number>0</number>
        </property>
@@ -527,6 +527,16 @@
        </property>
        <item>
         <widget class="QLabel" name="previewLabel">
+         <property name="text">
+          <string>视频预览区域</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="previewLabel1">
          <property name="text">
           <string>视频预览区域</string>
          </property>

@@ -93,8 +93,8 @@ MainWindow::MainWindow(QWidget *parent)
     );
 
     connect(&_h264Decoder,&H264Decoder::frameReady,this,[this](const QImage& image){
-        ui->previewLabel->setPixmap(
-            QPixmap::fromImage(image).scaled(ui->previewLabel->size(),Qt::KeepAspectRatio,Qt::SmoothTransformation)
+        ui->previewLabel1->setPixmap(
+            QPixmap::fromImage(image).scaled(ui->previewLabel1->size(),Qt::KeepAspectRatio,Qt::SmoothTransformation)
         );
     });
 

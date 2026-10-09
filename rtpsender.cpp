@@ -265,12 +265,41 @@ bool rtpsender::sendRtpPacket(const uint8_t *data, size_t size, uint32_t timesta
 
     std::memcpy(packet.data()+RTP_HEADER_SIZE,data,size);
 
-    qint64 ret=_socket.writeDatagram(reinterpret_cast<const char*>(packet.data()),static_cast<qint64>(packet.size()),_remoteAddress,_remoteport);
 
-    if(ret<0){
-        qDebug()<<"send rtp failed:"<<_socket.errorString();
+    QByteArray datagram(
+        reinterpret_cast<const char*>(packet.data()),
+        static_cast<int>(packet.size())
+    );
+
+    auto address = _remoteAddress;
+    auto port = _remoteport;
+
+    bool queued = QMetaObject::invokeMethod(
+        &_socket,
+        [this, datagram, address, port]() {
+
+            qint64 ret = _socket.writeDatagram(
+                datagram, address, port
+            );
+
+            if (ret < 0) {
+                qDebug() << "send rtp failed:"
+                         << _socket.errorString();
+            }
+
+        },
+        Qt::QueuedConnection
+    );
+
+    if (!queued) {
         return false;
     }
+//    //qint64 ret=_socket.writeDatagram(reinterpret_cast<const char*>(packet.data()),static_cast<qint64>(packet.size()),_remoteAddress,_remoteport);
+
+//    if(ret<0){
+//        qDebug()<<"send rtp failed:"<<_socket.errorString();
+//        return false;
+//    }
     ++_sequence;
     return true;
 }

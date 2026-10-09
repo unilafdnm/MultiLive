@@ -21,7 +21,7 @@ isEmpty(FFMPEG_ROOT) {
 # depend on your compiler). Please consult the documentation of the
 # deprecated API in order to know how to port your code away from it.
 DEFINES += QT_DEPRECATED_WARNINGS
-INCLUDEPATH += $$FFMPEG_ROOT/include
+INCLUDEPATH += $$FFMPEG_ROOT/include $$SDL_ROOT/include
 
 # You can also make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
@@ -34,13 +34,19 @@ LIBS += -L$$FFMPEG_ROOT/lib \
         -lavutil \
         -lswscale \
         -lswresample \
-        -lavdevice
+        -lavdevice \
+        -L$$SDL_ROOT/lib \
+        -lSDL3
 
 
 SOURCES += \
+    aacdecoder.cpp \
     accencoder.cpp \
     audioencoderthread.cpp \
     audioframequeue.cpp \
+    audioplayer.cpp \
+    audiortpreceiver.cpp \
+    audiortpsender.cpp \
     cameracapture.cpp \
     h264decoder.cpp \
     h264encoder.cpp \
@@ -60,9 +66,13 @@ SOURCES += \
 
 HEADERS += \
     StreamConfig.h \
+    aacdecoder.h \
     accencoder.h \
     audioencoderthread.h \
     audioframequeue.h \
+    audioplayer.h \
+    audiortpreceiver.h \
+    audiortpsender.h \
     cameracapture.h \
     encodepacket.h \
     h264decoder.h \
