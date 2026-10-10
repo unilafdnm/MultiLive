@@ -63,6 +63,15 @@ bool RtpReceiver::isRunning() const
     return  _running;
 }
 
+void RtpReceiver::setExpectedSsrc(quint32 ssrc)
+{
+    if(_expectSsrc != ssrc){
+        resetFuA();
+    }
+    _expectSsrc=ssrc;
+
+}
+
 void RtpReceiver::handleDatagram(const QByteArray &datagram)
 {
     constexpr int RTP_FIXED_HEADER_SIZE=12;
@@ -97,7 +106,10 @@ void RtpReceiver::handleDatagram(const QByteArray &datagram)
     const quint16 sequence=readUint16(data+2);
     const quint32 timestamp=readUint32(data+4);
     const quint32 ssrc=readUint32(data+8);
-    Q_UNUSED(ssrc);
+
+    if(_expectSsrc!=0 && ssrc!=_expectSsrc){
+        return;
+    }
 
     int headerSize=RTP_FIXED_HEADER_SIZE+csrcCount*4;
     if(headerSize > packetSize){
@@ -211,7 +223,7 @@ void RtpReceiver::handleFuA(const uint8_t *payload, int payloadSize, quint16 seq
         _fuBuffer.append(startCode,4);
         _fuBuffer.append(static_cast<char>(originalNaluHeader));
         _fuBuffer.append(reinterpret_cast<const char*>(fragmentData),fragmentSize);
-        qDebug()<<"FU-A start:seq="<<sequence<<"type="<<naluType;
+        //qDebug()<<"FU-A start:seq="<<sequence<<"type="<<naluType;
         if(end){
             emit h264NaluReady(_fuBuffer,timestamp,market);
             resetFuA();
@@ -241,7 +253,7 @@ void RtpReceiver::handleFuA(const uint8_t *payload, int payloadSize, quint16 seq
     _fuBuffer.append(reinterpret_cast<const char*>(fragmentData),fragmentSize);
 
     if(end){
-        qDebug()<<"FU-A complete:size="<<_fuBuffer.size()<<" timestamp"<<timestamp;
+        //qDebug()<<"FU-A complete:size="<<_fuBuffer.size()<<" timestamp"<<timestamp;
         emit h264NaluReady(_fuBuffer,timestamp,market);
         resetFuA();
     }

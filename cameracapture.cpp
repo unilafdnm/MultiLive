@@ -192,34 +192,63 @@ void CameraCapture::captureLoop(std::string cameraName,const StreamConfig& confi
             av_packet_unref(packet);
             continue;
         }
-        avcodec_send_packet(codec_ctx,packet);
-        while(avcodec_receive_frame(codec_ctx,frame)== 0){
-           sws_ctx=sws_getCachedContext(sws_ctx,frame->width,frame->height,static_cast<AVPixelFormat>(frame->format),
+        int sendRet=avcodec_send_packet(codec_ctx,packet);
+
+        if(sendRet<0){
+            char errorText[AV_ERROR_MAX_STRING_SIZE]{};
+            av_strerror(sendRet,errorText,sizeof(errorText));
+
+            qWarning()<< "camera decoder rejected packet:"<< errorText;
+
+            avcodec_flush_buffers(codec_ctx);
+            av_packet_unref(packet);
+            continue;
+        }
+
+        while(true){
+            int receiveRet=avcodec_receive_frame(codec_ctx,frame);
+            if(receiveRet == AVERROR(EAGAIN) || receiveRet == AVERROR_EOF){
+                break;
+            }
+            if(receiveRet<0){
+                char errorText[AV_ERROR_MAX_STRING_SIZE]{};
+                av_strerror(receiveRet,errorText,sizeof(errorText));
+
+                qWarning()<< "camera decode frame failed:"<< errorText;
+
+                av_frame_unref(frame);
+                avcodec_flush_buffers(codec_ctx);
+                break;
+            }
+
+            sws_ctx=sws_getCachedContext(sws_ctx,frame->width,frame->height,static_cast<AVPixelFormat>(frame->format),
                             frame->width,frame->height,AV_PIX_FMT_RGB24,SWS_BILINEAR,nullptr,nullptr,nullptr);
-           if(!sws_ctx){
-               std::cout<<"sws context failed\n";
-               continue;
-           }
+            if(!sws_ctx){
+                std::cout<<"sws context failed\n";
+                continue;
+            }
 
-           int64_t timestampUs=0;
-           if(_clock){
+            int64_t timestampUs=0;
+            if(_clock){
                timestampUs=_clock->elapsedUs();
-           }
-           _encoderThread.submit(frame,timestampUs);
+            }
+            _encoderThread.submit(frame,timestampUs);
 
 
-           QImage image(frame->width,frame->height,QImage::Format_RGB888);
-           if(image.isNull()){
+            QImage image(frame->width,frame->height,QImage::Format_RGB888);
+            if(image.isNull()){
                qDebug()<<"allocate preview image failed";
                continue;
-           }
+            }
 
-           uint8_t* dstData[4]={image.bits(),nullptr,nullptr,nullptr};
-           int dstLinesize[4]={image.bytesPerLine(),0,0,0};
+            uint8_t* dstData[4]={image.bits(),nullptr,nullptr,nullptr};
+            int dstLinesize[4]={image.bytesPerLine(),0,0,0};
 
-           sws_scale(sws_ctx,frame->data,frame->linesize,0,frame->height,dstData,dstLinesize);
-           emit frameReady(image);
+            sws_scale(sws_ctx,frame->data,frame->linesize,0,frame->height,dstData,dstLinesize);
+            emit frameReady(image);
             frameCount++;
+
+            av_frame_unref(frame);
         }
         av_packet_unref(packet);
     }

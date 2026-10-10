@@ -69,6 +69,12 @@ void AudioRtpReceiver::setAacCallback(AudioRtpReceiver::AacCallback callback)
 
 }
 
+void AudioRtpReceiver::setExpectedSsrc(uint32_t ssrc)
+{
+    _expectedSsrc=ssrc;
+
+}
+
 void AudioRtpReceiver::onReadyRead()
 {
     if(!_socket){
@@ -120,6 +126,10 @@ bool AudioRtpReceiver::parseRtpPacket(const uint8_t *data, size_t size)
 
     uint32_t ssrc=(static_cast<uint32_t>(data[8])<<24)|(static_cast<uint32_t>(data[9])<<16)|
                 (static_cast<uint32_t>(data[10])<<8)|(static_cast<uint32_t>(data[11]));
+
+    if(_expectedSsrc!=0 && ssrc !=_expectedSsrc){
+        return false;
+    }
 
     int headerSize=RTP_HEADER_SIZE+csrcCount*4;
     if(headerSize > size){

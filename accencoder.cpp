@@ -35,9 +35,22 @@ bool accencoder::init(int inputSampleRate, const AVChannelLayout &inputChannelLa
         qDebug()<<"audio avcodec_alloc_context3";
         return false;
     }
-    _codec_ctx->sample_rate=inputSampleRate;
-    _codec_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
-    av_channel_layout_copy(&_codec_ctx->ch_layout,&inputLayout);
+
+    constexpr int OUTPUT_SAMPLE_RATE = 48000;
+    constexpr int OUTPUT_CHANNELS = 2;
+
+    _codec_ctx->sample_rate = OUTPUT_SAMPLE_RATE;
+    _codec_ctx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+    av_channel_layout_default(
+        &_codec_ctx->ch_layout,
+        OUTPUT_CHANNELS
+    );
+
+
+
+//    _codec_ctx->sample_rate=inputSampleRate;
+//    _codec_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
+//    av_channel_layout_copy(&_codec_ctx->ch_layout,&inputLayout);
     _codec_ctx->bit_rate=config.audioBitrate;
     _codec_ctx->time_base=AVRational{1,_codec_ctx->sample_rate};
 
@@ -99,7 +112,7 @@ void accencoder::encode(AVFrame *frame,int64_t timestampUs)
 
 
     int outSamples=av_rescale_rnd(swr_get_delay(_swr_ctx,frame->sample_rate)+frame->nb_samples,
-                                  _codec_ctx->sample_rate,_frame->sample_rate,AV_ROUND_UP);
+                                  _codec_ctx->sample_rate,frame->sample_rate,AV_ROUND_UP);
     uint8_t** convertData=nullptr;
     int convertedLinesize=0;
     if(av_samples_alloc_array_and_samples(&convertData,&convertedLinesize,_codec_ctx->ch_layout.nb_channels,outSamples,_codec_ctx->sample_fmt,0)<0){

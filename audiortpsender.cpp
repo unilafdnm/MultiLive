@@ -111,6 +111,16 @@ void AudioRtpSender::setSampleRate(uint32_t sampleRate)
 
 }
 
+uint32_t AudioRtpSender::timestampBase() const
+{
+    return _timestampBase;
+}
+
+uint32_t AudioRtpSender::ssrc() const
+{
+    return _ssrc;
+}
+
 bool AudioRtpSender::sendRtpPacket(const uint8_t *data, size_t size, uint32_t timestamp, bool marker)
 {
     if(!_opened ||!data||size==0){

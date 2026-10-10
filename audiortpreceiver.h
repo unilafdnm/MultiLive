@@ -22,6 +22,7 @@ public:
     void close();
 
     void setAacCallback(AacCallback callback);
+    void setExpectedSsrc(uint32_t ssrc);
 
 private:
     void onReadyRead();
@@ -34,6 +35,7 @@ private:
     bool _opened=false;
     AacCallback _aacCallback;
     static constexpr uint8_t RTP_PAYLOAD_TYPE=97;
+    uint32_t _expectedSsrc{0};
 
 };
 

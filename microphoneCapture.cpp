@@ -82,7 +82,11 @@ void MicrophoneCapture::captureLoop(std::string microphoneName,const StreamConfi
     fmt_ctx->interrupt_callback.opaque=this;
 
     std::string device_name="audio="+microphoneName;
-    int ret=avformat_open_input(&fmt_ctx,device_name.c_str(),input_fmx,nullptr);
+    AVDictionary* inputOptions=nullptr;
+    av_dict_set(&inputOptions,"audio_buffer_size","80",0);
+
+    int ret=avformat_open_input(&fmt_ctx,device_name.c_str(),input_fmx,&inputOptions);
+    av_dict_free(&inputOptions);
     if(ret < 0){
         qDebug()<<"avformat_open_input failed";
         char errorText[AV_ERROR_MAX_STRING_SIZE];

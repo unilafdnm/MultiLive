@@ -39,7 +39,7 @@ enum class LiveState{
 
 struct SyncVideoFrame{
     QImage image;
-    quint32 timestamp=0;
+    int64_t ptsUs{0};
 };
 
 
@@ -60,6 +60,7 @@ private:
     StreamConfig getStreamConfig();
     void setLiveState(LiveState);
     void updateStateTable();
+    void resetRealtimeSync();
 
 private:
     struct PublisherStatesSample{
@@ -90,8 +91,12 @@ private:
     //音视频同步
     std::deque<SyncVideoFrame> _videoSyncQueue;
     QTimer _avSyncTimer;
-    bool _videoBaseSet{false};
-    quint32 _videoBaseTimestamp{0};
+
+
+    quint32 _videoRtpTimestampBase{0};
+    quint32 _audioRtpTimestampBase{0};
+
+    bool _syncSessionActive{false};
 
     QTimer _statsTimer;
     QElapsedTimer _statsElapsedTimer;

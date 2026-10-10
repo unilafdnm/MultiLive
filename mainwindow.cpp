@@ -43,6 +43,13 @@ QString connectionStateText(PublisherConnectionState state){
 
 }
 
+int64_t rtpTimestampToUs(quint32 timestamp,quint32 timestampBase,int clockRate){
+    const qint32 delta=static_cast<qint32>(timestamp-timestampBase);
+    return av_rescale_q(delta,AVRational{1,clockRate},AV_TIME_BASE_Q);
+
+}
+
+
 }
 
 
@@ -59,6 +66,9 @@ MainWindow::MainWindow(QWidget *parent)
     ,_liveState(LiveState::Idle)
 {
 
+    ui->setupUi(this);
+
+
     _cameracapture->setPacketSink(
         &_realtimeSession
     );
@@ -70,6 +80,9 @@ MainWindow::MainWindow(QWidget *parent)
     _microphonecapture->setPacketSink(
         &_realtimeSession
     );
+
+
+
 
 
     if(!_h264Decoder.open()){
@@ -87,8 +100,13 @@ MainWindow::MainWindow(QWidget *parent)
         _aacDecoder.decode(aac.data(),aac.size(),timestamp);
     });
     _aacDecoder.setPcmCallback([this](std::vector<uint8_t> pcm,uint32_t timestamp){
-        Q_UNUSED(timestamp);
-        _audioPlayer.player(pcm.data(),pcm.size());
+        if(!_syncSessionActive){
+            return ;
+        }
+
+        const int64_t audioPtsUs=rtpTimestampToUs(timestamp,_audioRtpTimestampBase,48000);
+        _audioPlayer.player(pcm.data(),pcm.size(),audioPtsUs);
+
     });
 
     if (!_audioRtpReceiver.open(5006)) {
@@ -98,6 +116,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(&_rtpReceiver,&RtpReceiver::h264NaluReady,this,
         [this](QByteArray nalu,quint32 timestamp,bool marker){
+            if(!_syncSessionActive){
+                return ;
+            }
             if (nalu.size() < 5) {
                 return;
             }
@@ -107,19 +128,35 @@ MainWindow::MainWindow(QWidget *parent)
     );
 
     connect(&_h264Decoder,&H264Decoder::frameReady,this,[this](const QImage& image,quint32 timestamp){
-        if(!_videoBaseSet){
-            _videoBaseTimestamp=timestamp;
-            _videoBaseSet=true;
+
+        if(!_syncSessionActive){
+            return ;
         }
-        qDebug()<<"111";
-        _videoSyncQueue.push_back({image,timestamp});
+
+        const int64_t videoPtsUs=rtpTimestampToUs(timestamp,_videoRtpTimestampBase,90000);
+
+
+        constexpr size_t MAX_VIDEO_QUEUE=5;
+
+        while(_videoSyncQueue.size() >= MAX_VIDEO_QUEUE){
+            _videoSyncQueue.pop_front();
+//            qDebug() << "drop old video frame,"
+//                     << "queue ="
+//                     << _videoSyncQueue.size();
+        }
+        _videoSyncQueue.push_back({image,videoPtsUs});
 
     });
-
-    _avSyncTimer.setInterval(5);
+    _avSyncTimer.setInterval(10);
 
 
     connect(&_avSyncTimer,&QTimer::timeout,this,[this](){
+        if(!_syncSessionActive){
+            return ;
+        }
+
+
+
 
         //这里的问题
        if(_videoSyncQueue.empty()){
@@ -128,18 +165,31 @@ MainWindow::MainWindow(QWidget *parent)
        if(!_audioPlayer.started()){
            return;
        }
+
+
        SyncVideoFrame& frame=_videoSyncQueue.front();
 
-       uint32_t videoDelta=frame.timestamp-_videoBaseTimestamp;
+       const int64_t videoUs=frame.ptsUs;
 
-       //H264 RTP Clock=90000Hz
-       int64_t videoUs=static_cast<int64_t>(videoDelta*1000000ULL/90000ULL);
        int64_t audioUs=_audioPlayer.playedUs();
        int64_t diffUs=videoUs-audioUs;
+
+       static int logCounter = 0;
+
+       if (++logCounter >= 100) {
+           logCounter = 0;
+
+           qDebug()
+               << "videoUs =" << videoUs
+               << "audioUs =" << audioUs
+               << "diffMs =" << diffUs / 1000.0
+               << "videoQueue =" << _videoSyncQueue.size()
+               << "audioQueueBytes =" << _audioPlayer.queueBytes();
+       }
+
        //视频比音频早30ms,暂时不显示
        if(diffUs>30000){
-           qDebug() << "video early, wait:"
-                    << diffUs / 1000.0 << "ms";
+//           qDebug() << "video early, wait:"<< diffUs / 1000.0 << "ms";
            return;
        }
        /*
@@ -147,12 +197,11 @@ MainWindow::MainWindow(QWidget *parent)
          → 这帧没价值了
         */
        if(diffUs<-100000){
-           qDebug()<<"drop late video frame diff="<<diffUs/1000.0<<"ms";
+          // qDebug()<<"drop late video frame diff="<<diffUs/1000.0<<"ms";
            _videoSyncQueue.pop_front();
            return;
        }
-       qDebug() << "display video:"
-                << diffUs / 1000.0 << "ms";
+       //qDebug() << "display video:"<< diffUs / 1000.0 << "ms";
        ui->previewLabel1->setPixmap(
                    QPixmap::fromImage(
                        frame.image
@@ -173,12 +222,7 @@ MainWindow::MainWindow(QWidget *parent)
             << "start RTP receiver failed";
     }
 
-    _realtimeSession.startVideoRtp(
-        "127.0.0.1",
-        5004
-    );
 
-    ui->setupUi(this);
     //枚举添加摄像头
     const QList<QCameraInfo> cameras=QCameraInfo::availableCameras();
     const QCameraInfo defaultCamera=QCameraInfo::defaultCamera();
@@ -270,20 +314,14 @@ MainWindow::MainWindow(QWidget *parent)
         if (_liveState != LiveState::Idle && _liveState != LiveState::Error) {
             return;
         }
-
-        _realtimeSession.startVideoRtp(
-            "127.0.0.1",
-            5004
-        );
-        _realtimeSession.startAudioRtp(
-            "127.0.0.1",
-            5006
-        );
-            _avSyncTimer.start();
-
-        bool outputAdded=false;
+        _cameracapture->stop();
+        _screencapture->stop();
+        _microphonecapture->stop();
+        _realtimeSession.stopRtp();
+        resetRealtimeSync();
         _publishers->close();
 
+        bool outputAdded=false;
 
 
         QString _selectdevice=ui->sourceComboBox->currentText();
@@ -326,16 +364,33 @@ MainWindow::MainWindow(QWidget *parent)
             return;
         }
 
-
-
-
         setLiveState(LiveState::Starting);
 
+        const bool videoRtpStarted=_realtimeSession.startVideoRtp("127.0.0.1",5004);
+        const bool audioRtpStarted=_realtimeSession.startAudioRtp("127.0.0.1",5006);
+
+        if(!videoRtpStarted ||!audioRtpStarted){
+            _realtimeSession.stopRtp();
+            resetRealtimeSync();
+            _publishers->close();
+            QMessageBox::warning(this,"启动失败","无法启动本地RTP预览");
+            return;
+        }
+        _videoRtpTimestampBase=_realtimeSession.videoRtpTimestampBase();
+        _audioRtpTimestampBase=_realtimeSession.audioRtpTimestampBase();
+        _rtpReceiver.setExpectedSsrc(_realtimeSession.videoRtpSsrc());
+        _audioRtpReceiver.setExpectedSsrc(_realtimeSession.audioRtpSsrc());
+
+
+
+
+        _liveClock.start();
+        _syncSessionActive = true;
+        _avSyncTimer.start();
         if(_selectdevice=="摄像头"){
             if(_screencapture->getRunning()){
                 _screencapture->stop();
             }
-            _liveClock.start();
             _cameracapture->setClock(&_liveClock);
             _cameracapture->start(selectCamera.toStdString(),getStreamConfig());
         }
@@ -343,11 +398,11 @@ MainWindow::MainWindow(QWidget *parent)
             if(_cameracapture->getRunning()){
                 _cameracapture->stop();
             }
-            _liveClock.start();
             _screencapture->setClock(&_liveClock);
             _screencapture->start(getStreamConfig());
         }
        _microphonecapture->setClock(&_liveClock);
+
        _microphonecapture->start(selectMicrophone.toStdString(),getStreamConfig());
     });
 
@@ -454,6 +509,8 @@ MainWindow::~MainWindow()
     _microphonecapture->stop();
     _cameracapture->stop();
     _screencapture->stop();
+    _realtimeSession.stopRtp();
+    resetRealtimeSync();
     _publishers->close();
 
     delete _publishers;
@@ -610,6 +667,17 @@ void MainWindow::updateStateTable()
 
 }
 
+void MainWindow::resetRealtimeSync()
+{
+    _avSyncTimer.stop();
+    _videoSyncQueue.clear();
+    _audioPlayer.reset();
+    _syncSessionActive=false;
+    _rtpReceiver.setExpectedSsrc(0);
+    _audioRtpReceiver.setExpectedSsrc(0);
+
+}
+
 
 void MainWindow::on_stopButton_clicked()
 {
@@ -622,6 +690,8 @@ void MainWindow::on_stopButton_clicked()
     _cameracapture->stop();
     _screencapture->stop();
     _microphonecapture->stop();
+    resetRealtimeSync();
+    _realtimeSession.stopRtp();
     _publishers->close();
 
     setLiveState(LiveState::Idle);

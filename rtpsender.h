@@ -22,6 +22,9 @@ public:
     void close();
     bool isopen()const;
     bool sendH264(const AVPacket*packet,AVRational timeBase);
+    uint32_t timestampBase()const;
+    uint32_t ssrc()const;
+
 
 private:
     struct Nalu{

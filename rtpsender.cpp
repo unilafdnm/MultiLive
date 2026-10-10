@@ -99,6 +99,16 @@ bool rtpsender::sendH264(const AVPacket *packet, AVRational timeBase)
 
 }
 
+uint32_t rtpsender::timestampBase() const
+{
+    return _timestampBase;
+}
+
+uint32_t rtpsender::ssrc() const
+{
+    return _ssrc;
+}
+
 std::vector<rtpsender::Nalu> rtpsender::splitNalus(const uint8_t *data, size_t size)
 {
     std::vector<Nalu> result;

@@ -71,3 +71,24 @@ bool realtimesession::startAudioRtp(const std::string &ip, uint16_t port)
 {
     return _audioRtpSender.open(ip,port);
 }
+
+uint32_t realtimesession::videoRtpTimestampBase() const
+{
+    return _videoRtpSender.timestampBase();
+}
+
+uint32_t realtimesession::audioRtpTimestampBase() const
+{
+    return _audioRtpSender.timestampBase();
+}
+
+uint32_t realtimesession::videoRtpSsrc() const
+{
+    return _videoRtpSender.ssrc();
+}
+
+uint32_t realtimesession::audioRtpSsrc() const
+{
+    return _audioRtpSender.ssrc();
+
+}

@@ -24,6 +24,10 @@ public:
 
     bool sendAAc(const AVPacket* packet,AVRational timeBase);
     void setSampleRate(uint32_t sampleRate);
+
+    uint32_t timestampBase()const;
+    uint32_t ssrc()const;
+
 private:
     bool sendRtpPacket(const uint8_t* data,size_t size,uint32_t timestamp,bool marker);
 

@@ -18,6 +18,10 @@ public:
     void stopRtp();
     bool startVideoRtp(const std::string& ip,uint16_t port);
     bool startAudioRtp(const std::string& ip,uint16_t port);
+    uint32_t videoRtpTimestampBase()const;
+    uint32_t audioRtpTimestampBase()const;
+    uint32_t videoRtpSsrc()const;
+    uint32_t audioRtpSsrc()const;
 
 
 private:

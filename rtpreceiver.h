@@ -16,6 +16,8 @@ public:
     void stop();
     bool isRunning()const;
 
+    void setExpectedSsrc(quint32 ssrc);
+
 private:
     void handleDatagram(const QByteArray& datagram);
     void handleH264Payload(const uint8_t* payload,int payloadSize,quint16 sequence,quint32 timestamp,bool market);
@@ -31,6 +33,7 @@ private:
     bool _assemblingFu=false;
     quint32 _fuTimestamp=0;
     quint16 _expectedFuSequence=0;
+    quint32 _expectSsrc{0};
 
 signals:
     void h264NaluReady(QByteArray nalu,quint32 timestamp,bool market);
