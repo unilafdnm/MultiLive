@@ -7,7 +7,7 @@
 
 #include <QUdpSocket>
 #include <QHostAddress>
-
+#include<atomic>
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/rational.h>

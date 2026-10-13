@@ -17,6 +17,7 @@
 #include "audiortpreceiver.h"
 #include "aacdecoder.h"
 #include "audioplayer.h"
+#include"lansession.h"
 
 extern "C"
 {
@@ -42,6 +43,11 @@ struct SyncVideoFrame{
     int64_t ptsUs{0};
 };
 
+enum class LanReceiveState{
+    Waiting,
+    Receiving
+};
+
 
 
 QT_BEGIN_NAMESPACE
@@ -60,7 +66,14 @@ private:
     StreamConfig getStreamConfig();
     void setLiveState(LiveState);
     void updateStateTable();
-    void resetRealtimeSync();
+    bool resetRealtimeSync();
+
+    void setupLanControl();
+    void startMediaCapture();
+
+    void beginLanReceiveSession(const LanSession& session);
+    void endLanReceiveSession();
+
 
 private:
     struct PublisherStatesSample{
@@ -97,6 +110,13 @@ private:
     quint32 _audioRtpTimestampBase{0};
 
     bool _syncSessionActive{false};
+
+    LanControl _lanControl;
+    bool _lanReceiverMode=false;
+    QString _lanRemoteIp;
+
+    LanReceiveState _lanReceiveState=LanReceiveState::Waiting;
+
 
     QTimer _statsTimer;
     QElapsedTimer _statsElapsedTimer;

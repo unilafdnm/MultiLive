@@ -114,6 +114,31 @@ void H264Decoder::pushNalu(const QByteArray &nalu, quint32 timestamp, bool marke
 
 }
 
+bool H264Decoder::reset()
+{
+    if(!_opened || !_codecCtx){
+        return false;
+    }
+
+    //清空未完成的H.264 Access Unit
+    _accessUnitBuffer.clear();
+    _hasTimestamp=true;
+    _currentTimestamp=0;
+
+    //释放当前的packet和frame的引用
+    if(_packet){
+        av_packet_unref(_packet);
+    }
+    if(_frame){
+        av_frame_unref(_frame);
+    }
+
+    //重置FFmpeg解码器内部状态
+    avcodec_flush_buffers(_codecCtx);
+    return true;
+
+}
+
 void H264Decoder::decodeAccessUnit(const QByteArray &data, quint32 timestamp)
 {
 

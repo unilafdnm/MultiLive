@@ -7,6 +7,7 @@
 #include"outputtypes.h"
 #include"outputtargetparser.h"
 
+#include<QCoreApplication>
 #include<QMessageBox>
 #include<QComboBox>
 #include <QDebug>
@@ -68,6 +69,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->setupUi(this);
 
+    const QStringList args=QCoreApplication::arguments();
+    _lanReceiverMode=args.contains("--lan-recv");
+    const QString prefix="--lan-send=";
+
+    for(const QString& arg:args){
+        if(arg.startsWith(prefix)){
+            _lanRemoteIp=arg.mid(prefix.size()).trimmed();
+        }
+    }
+
 
     _cameracapture->setPacketSink(
         &_realtimeSession
@@ -97,6 +108,11 @@ MainWindow::MainWindow(QWidget *parent)
     }
 
     _audioRtpReceiver.setAacCallback([this](std::vector<uint8_t> aac,uint32_t timestamp){
+
+        if(!_syncSessionActive){
+            return;
+        }
+
         _aacDecoder.decode(aac.data(),aac.size(),timestamp);
     });
     _aacDecoder.setPcmCallback([this](std::vector<uint8_t> pcm,uint32_t timestamp){
@@ -109,9 +125,14 @@ MainWindow::MainWindow(QWidget *parent)
 
     });
 
-    if (!_audioRtpReceiver.open(5006)) {
-        qWarning()<< "start Audio RTP receiver failed";
+
+    if(_lanRemoteIp.isEmpty()){
+        if (!_audioRtpReceiver.open(5006)) {
+            qWarning()<< "start Audio RTP receiver failed";
+        }
     }
+
+
 
 
     connect(&_rtpReceiver,&RtpReceiver::h264NaluReady,this,
@@ -217,10 +238,14 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
 
-    if (!_rtpReceiver.start(5004)) {
-        qDebug()
-            << "start RTP receiver failed";
+
+    if(_lanRemoteIp.isEmpty()){
+        if (!_rtpReceiver.start(5004)) {
+            qDebug()<< "start RTP receiver failed";
+        }
     }
+
+
 
 
     //枚举添加摄像头
@@ -324,18 +349,32 @@ MainWindow::MainWindow(QWidget *parent)
         bool outputAdded=false;
 
 
-        QString _selectdevice=ui->sourceComboBox->currentText();
-        const QString selectCamera=ui->camerDeviceComboBox->currentText();
-        const QString selectMicrophone=ui->microphoneDeviceComboBox->currentText();
 
-        if(_selectdevice == "摄像头" &&selectCamera.isEmpty()){
-            QMessageBox::warning(this,"打开摄像头失败","没有选择可用的摄像头");
+        if(!_lanRemoteIp.isEmpty()){
+
+            setLiveState(LiveState::Starting);
+            const std::string ip=_lanRemoteIp.toStdString();
+            const bool videoOk=_realtimeSession.startVideoRtp(ip,5004);
+            const bool audioOk=_realtimeSession.startAudioRtp(ip,5006);
+
+            if(!videoOk || !audioOk){
+                _realtimeSession.stopRtp();
+                setLiveState(LiveState::Error);
+                QMessageBox::warning(this,"LAN","RTP Sender启动失败");
+                return;
+            }
+            LanSession session;
+            session.videoSsrc=_realtimeSession.videoRtpSsrc();
+            session.videoBase=_realtimeSession.videoRtpTimestampBase();
+            session.audioSsrc=_realtimeSession.audioRtpSsrc();
+            session.audioBase=_realtimeSession.audioRtpTimestampBase();
+            _lanControl.connectToPeer(_lanRemoteIp,session,6000);
             return;
         }
-        if(selectMicrophone.isEmpty()){
-            QMessageBox::warning(this,"打开麦克风失败","没有选择可用的麦克风");
-            return;
-        }
+
+
+
+
 
         for(int row=0;row<ui->outputListWidget->count();row++){
             QListWidgetItem* item=ui->outputListWidget->item(row);
@@ -382,28 +421,13 @@ MainWindow::MainWindow(QWidget *parent)
         _audioRtpReceiver.setExpectedSsrc(_realtimeSession.audioRtpSsrc());
 
 
-
-
         _liveClock.start();
         _syncSessionActive = true;
         _avSyncTimer.start();
-        if(_selectdevice=="摄像头"){
-            if(_screencapture->getRunning()){
-                _screencapture->stop();
-            }
-            _cameracapture->setClock(&_liveClock);
-            _cameracapture->start(selectCamera.toStdString(),getStreamConfig());
-        }
-        else if(_selectdevice == "屏幕"){
-            if(_cameracapture->getRunning()){
-                _cameracapture->stop();
-            }
-            _screencapture->setClock(&_liveClock);
-            _screencapture->start(getStreamConfig());
-        }
-       _microphonecapture->setClock(&_liveClock);
 
-       _microphonecapture->start(selectMicrophone.toStdString(),getStreamConfig());
+
+
+
     });
 
 
@@ -501,7 +525,7 @@ MainWindow::MainWindow(QWidget *parent)
         handleCaptureFailed
     );
 
-
+    setupLanControl();
 }
 
 MainWindow::~MainWindow()
@@ -667,14 +691,153 @@ void MainWindow::updateStateTable()
 
 }
 
-void MainWindow::resetRealtimeSync()
+bool MainWindow::resetRealtimeSync()
 {
-    _avSyncTimer.stop();
-    _videoSyncQueue.clear();
-    _audioPlayer.reset();
+    //先禁止继续处理媒体数据
     _syncSessionActive=false;
+    _avSyncTimer.stop();
+
+    //取消旧RTP会话过滤参数
     _rtpReceiver.setExpectedSsrc(0);
     _audioRtpReceiver.setExpectedSsrc(0);
+
+    //清空网络接收缓冲
+    _rtpReceiver.clearPending();
+    _audioRtpReceiver.clearPending();
+
+    //清空应用层同步与播放缓存
+    _videoSyncQueue.clear();
+    _audioPlayer.reset();
+
+    //清空编码器相关状态
+    const bool videoOk=_h264Decoder.reset();
+    const bool audioOk=_aacDecoder.reset();
+
+    //清除上一个会话时间基准
+    _videoRtpTimestampBase=0;
+    _audioRtpTimestampBase=0;
+
+    ui->previewLabel1->clear();
+    return videoOk&&audioOk;
+
+}
+
+void MainWindow::setupLanControl()
+{
+    //B:接收远程会话参数
+    connect(&_lanControl,&LanControl::sessionReceived,this,[this](LanSession s){
+        beginLanReceiveSession(s);
+    });
+
+    //A:收到READY，开始真正采集
+    connect(&_lanControl,&LanControl::senderReady,this,[this](){
+
+        if(_lanRemoteIp.isEmpty() || _liveState != LiveState::Starting){
+            return;
+        }
+        startMediaCapture();
+        setLiveState(LiveState::Live);
+
+    });
+    //TCP断开，结束本次媒体对话
+    connect(&_lanControl,&LanControl::peerClosed,this,[this](){
+
+        if(_lanReceiverMode){
+            endLanReceiveSession();
+            return;
+        }
+        if(!_lanRemoteIp.isEmpty() && (_liveState==LiveState::Starting || _liveState==LiveState::Live)){
+            on_stopButton_clicked();
+        }
+
+
+    });
+
+    connect(&_lanControl,&LanControl::failed,this,[this](const QString& reason){
+       qWarning()<<"LAN error"<<reason;
+       if(!_lanRemoteIp.isEmpty() && (_liveState==LiveState::Starting || _liveState==LiveState::Live)){
+           on_stopButton_clicked();
+       }
+       QMessageBox::warning(this,"局域网通信失败",reason);
+
+    });
+
+    if(_lanReceiverMode){
+
+        if(!_lanControl.listen(6000)){
+            QMessageBox::warning(this,"TCP监听失败",_lanControl.serverError());
+        }
+
+        ui->startButton->setEnabled(false);
+        ui->stopButton->setEnabled(false);
+
+    }
+
+
+
+}
+
+void MainWindow::startMediaCapture()
+{
+    const StreamConfig config=getStreamConfig();
+    const QString source=ui->sourceComboBox->currentText();
+    const QString camera=ui->camerDeviceComboBox->currentText();
+    const QString microphone=ui->microphoneDeviceComboBox->currentText();
+
+    _liveClock.start();
+
+    if(source == "摄像头"){
+        _screencapture->stop();
+        _cameracapture->setClock(&_liveClock);
+        _cameracapture->start(camera.toStdString(),config);
+    }else{
+        _cameracapture->stop();
+        _screencapture->setClock(&_liveClock);
+        _screencapture->start(config);
+    }
+    _microphonecapture->setClock(&_liveClock);
+    _microphonecapture->start(microphone.toStdString(),config);
+
+}
+
+void MainWindow::beginLanReceiveSession(const LanSession &session)
+{
+    if(!_lanReceiverMode || _lanReceiveState != LanReceiveState::Waiting){
+        _lanControl.rejectSession();
+        return;
+    }
+
+    if(!resetRealtimeSync()){
+        qWarning()<<"Decoder reset failed";
+        _lanControl.rejectSession();
+        return;
+    }
+
+    _videoRtpTimestampBase=session.videoBase;
+    _audioRtpTimestampBase=session.audioBase;
+    _rtpReceiver.setExpectedSsrc(session.videoSsrc);
+
+    _audioRtpReceiver.setExpectedSsrc(session.audioSsrc);
+
+    //开始处理新的媒体数据
+    _lanReceiveState=LanReceiveState::Receiving;
+    _syncSessionActive=true;
+    _avSyncTimer.start();
+
+    _lanControl.replyReady();
+
+    qDebug()<<"LAN session receiving";
+
+}
+
+void MainWindow::endLanReceiveSession()
+{
+    if(!_lanReceiverMode){
+        return;
+    }
+    resetRealtimeSync();
+    _lanReceiveState=LanReceiveState::Waiting;
+    qDebug()<<"LAN session waiting";
 
 }
 
@@ -692,6 +855,7 @@ void MainWindow::on_stopButton_clicked()
     _microphonecapture->stop();
     resetRealtimeSync();
     _realtimeSession.stopRtp();
+    _lanControl.stopClient();
     _publishers->close();
 
     setLiveState(LiveState::Idle);

@@ -23,6 +23,7 @@ public:
 
     void setAacCallback(AacCallback callback);
     void setExpectedSsrc(uint32_t ssrc);
+    void clearPending();
 
 private:
     void onReadyRead();

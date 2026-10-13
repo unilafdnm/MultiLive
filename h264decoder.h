@@ -22,6 +22,8 @@ public:
     void close();
     void pushNalu(const QByteArray& nalu,quint32 timestamp,bool market);
 
+    bool reset();
+
 private:
     void decodeAccessUnit(const QByteArray& data,quint32 timestamp);
 

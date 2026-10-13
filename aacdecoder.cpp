@@ -168,6 +168,30 @@ void AacDecoder::setPcmCallback(AacDecoder::PcmCallback callback)
 
 }
 
+bool AacDecoder::reset()
+{
+    if(!_opened || !_codecCtx){
+        return false;
+    }
+
+    avcodec_flush_buffers(_codecCtx);
+    if(_frame){
+        av_frame_unref(_frame);
+    }
+    if(_packet){
+        av_packet_unref(_packet);
+    }
+
+    swr_close(_swrCtx);
+
+    if(swr_init(_swrCtx)<0){
+        qWarning()<<"reset swr failed";
+        return false;
+    }
+    return true;
+
+}
+
 bool AacDecoder::createAudioSpecificConfig(int sampleRate, int channels)
 {
     static const int sampleRates[]={

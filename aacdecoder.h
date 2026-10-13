@@ -28,6 +28,8 @@ public:
 
     void setPcmCallback(PcmCallback callback);
 
+    bool reset();
+
 private:
     bool createAudioSpecificConfig(int sampleRate,int channels);
 

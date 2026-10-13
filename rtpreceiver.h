@@ -17,6 +17,7 @@ public:
     bool isRunning()const;
 
     void setExpectedSsrc(quint32 ssrc);
+    void clearPending();
 
 private:
     void handleDatagram(const QByteArray& datagram);

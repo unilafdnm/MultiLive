@@ -1,5 +1,5 @@
 #include "rtpreceiver.h"
-
+#include<QNetworkDatagram>
 namespace
 {
 
@@ -8,8 +8,8 @@ uint16_t readUint16(const uint8_t* data){
 }
 
 uint32_t readUint32(const uint8_t* data){
-    return (static_cast<uint16_t>(data[0]))<<24|(static_cast<uint16_t>(data[1]))<<16
-                |(static_cast<uint16_t>(data[2]))<<8|static_cast<uint16_t>(data[3]);
+    return (static_cast<uint32_t>(data[0]))<<24|(static_cast<uint32_t>(data[1]))<<16
+                |(static_cast<uint32_t>(data[2]))<<8|static_cast<uint32_t>(data[3]);
 }
 
 
@@ -69,6 +69,17 @@ void RtpReceiver::setExpectedSsrc(quint32 ssrc)
         resetFuA();
     }
     _expectSsrc=ssrc;
+
+}
+
+void RtpReceiver::clearPending()
+{
+    resetFuA();
+    while(_socket.hasPendingDatagrams()){
+        qint64 sz=_socket.pendingDatagramSize();
+        QByteArray buf(sz,0);
+        _socket.readDatagram(buf.data(),buf.size());
+    }
 
 }
 

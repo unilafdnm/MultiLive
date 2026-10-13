@@ -50,6 +50,7 @@ SOURCES += \
     cameracapture.cpp \
     h264decoder.cpp \
     h264encoder.cpp \
+    lansession.cpp \
     liveclock.cpp \
     main.cpp \
     mainwindow.cpp \
@@ -77,6 +78,7 @@ HEADERS += \
     encodepacket.h \
     h264decoder.h \
     h264encoder.h \
+    lansession.h \
     liveclock.h \
     mainwindow.h \
     microphoneCapture.h \

@@ -75,6 +75,18 @@ void AudioRtpReceiver::setExpectedSsrc(uint32_t ssrc)
 
 }
 
+void AudioRtpReceiver::clearPending()
+{
+    if(!_socket){
+        return;
+    }
+
+    while(_socket->hasPendingDatagrams()){
+        _socket->receiveDatagram();
+    }
+
+}
+
 void AudioRtpReceiver::onReadyRead()
 {
     if(!_socket){
@@ -107,11 +119,11 @@ bool AudioRtpReceiver::parseRtpPacket(const uint8_t *data, size_t size)
         qWarning()<<"Invalid RTP version:"<<version;
         return false;
     }
-    bool padding=data[0]&0x20 !=0;
-    bool extension=data[0]&0x10!=0;
+    bool padding=(data[0]&0x20) !=0;
+    bool extension=(data[0]&0x10)!=0;
     uint8_t csrcCount=data[0]&0x0F;
 
-    bool marker=data[1]&0x80!=0;
+    bool marker=(data[1]&0x80)!=0;
     uint8_t payloadType=data[1]&0x7F;
     if(payloadType != RTP_PAYLOAD_TYPE){
         return false;
