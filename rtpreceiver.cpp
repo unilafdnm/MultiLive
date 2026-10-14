@@ -18,9 +18,19 @@ uint32_t readUint32(const uint8_t* data){
 
 
 RtpReceiver::RtpReceiver(QObject *parent)
-    :QObject(parent)
+    :QObject(parent),_jitterBuffer(parent)
 {
     connect(&_socket,&QUdpSocket::readyRead,this,&RtpReceiver::onReadyRead);
+
+    _jitterBuffer.setPacketCallback([this](const QByteArray& data){
+        handleDatagram(data);
+    });
+
+
+    _jitterTimer.setInterval(5);
+    connect(&_jitterTimer,&QTimer::timeout,this,[this](){
+        _jitterBuffer.poll();
+    });
 
 }
 
@@ -41,6 +51,7 @@ bool RtpReceiver::start(qint16 port)
         return false;
     }
     _running=true;
+    _jitterTimer.start();
     qDebug()<<"RTP receiver listening:"<<port;
     return true;
 
@@ -54,6 +65,10 @@ void RtpReceiver::stop()
     _running=false;
     _socket.close();
     resetFuA();
+
+    _jitterTimer.stop();
+    _jitterBuffer.reset();
+
     return;
 
 }
@@ -66,9 +81,12 @@ bool RtpReceiver::isRunning() const
 void RtpReceiver::setExpectedSsrc(quint32 ssrc)
 {
     if(_expectSsrc != ssrc){
+        _jitterBuffer.reset();
         resetFuA();
     }
     _expectSsrc=ssrc;
+
+
 
 }
 
@@ -80,6 +98,8 @@ void RtpReceiver::clearPending()
         QByteArray buf(sz,0);
         _socket.readDatagram(buf.data(),buf.size());
     }
+
+    _jitterBuffer.reset();
 
 }
 
@@ -296,9 +316,34 @@ void RtpReceiver::onReadyRead()
         if(readSize<=0){
             continue;
         }
-
         datagram.resize(readSize);
-        handleDatagram(datagram);
+
+        if(datagram.size()<12){
+            continue;
+        }
+        const uint8_t* data=reinterpret_cast<const uint8_t*>(datagram.constData());
+
+        const uint8_t byte0=data[0];
+        uint8_t version=data[0]>>6;
+        if(version != 2){
+            continue;
+        }
+        const uint8_t byte1=data[1];
+        uint8_t payloadType=byte1&0x7F;
+        if(payloadType!=96){
+            continue;
+        }
+
+
+        quint32 ssrc=readUint32(reinterpret_cast<const uint8_t*>(datagram.constData())+8);
+        quint16 sequence=readUint16(reinterpret_cast<const uint8_t*>(datagram.constData())+2);
+
+        if(_expectSsrc!=0 &&ssrc!=_expectSsrc){
+            continue;
+        }
+
+        _jitterBuffer.push(sequence,datagram);
+
     }
 
 }

@@ -59,6 +59,7 @@ SOURCES += \
     networkpublisher.cpp \
     outputtargetparser.cpp \
     realtimesession.cpp \
+    rtpjitterbuffer.cpp \
     rtpreceiver.cpp \
     rtpsender.cpp \
     screencapture.cpp \
@@ -87,6 +88,7 @@ HEADERS += \
     outputtargetparser.h \
     outputtypes.h \
     realtimesession.h \
+    rtpjitterbuffer.h \
     rtpreceiver.h \
     rtpsender.h \
     screencapture.h \

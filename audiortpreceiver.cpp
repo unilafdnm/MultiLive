@@ -7,8 +7,21 @@
 
 #include <utility>
 
-AudioRtpReceiver::AudioRtpReceiver()
+AudioRtpReceiver::AudioRtpReceiver(QObject* parent)
+    :QObject(parent),_jitterBuffer(parent)
 {
+
+    _jitterBuffer.setPacketCallback([this](const QByteArray& data){
+
+        parseRtpPacket(reinterpret_cast<const uint8_t*>(data.constData()),data.size());
+
+    });
+
+    _jitterTimer.setInterval(5);
+
+    QObject::connect(&_jitterTimer,&QTimer::timeout,this,[this](){
+       _jitterBuffer.poll();
+    });
 
 }
 
@@ -39,6 +52,7 @@ bool AudioRtpReceiver::open(uint16_t port)
     });
 
     _opened=true;
+    _jitterTimer.start();
     qDebug()<< "Audio RTP Receiver opened"<< "port =" << _port;
     return true;
 
@@ -59,6 +73,10 @@ void AudioRtpReceiver::close()
     delete  _socket;
     _socket=nullptr;
     _opened=false;
+
+    _jitterTimer.stop();
+    _jitterBuffer.reset();
+
     return;
 
 }
@@ -72,6 +90,7 @@ void AudioRtpReceiver::setAacCallback(AudioRtpReceiver::AacCallback callback)
 void AudioRtpReceiver::setExpectedSsrc(uint32_t ssrc)
 {
     _expectedSsrc=ssrc;
+    _jitterBuffer.reset();
 
 }
 
@@ -85,6 +104,8 @@ void AudioRtpReceiver::clearPending()
         _socket->receiveDatagram();
     }
 
+    _jitterBuffer.reset();
+
 }
 
 void AudioRtpReceiver::onReadyRead()
@@ -96,10 +117,27 @@ void AudioRtpReceiver::onReadyRead()
     while(_socket->hasPendingDatagrams()){
         QNetworkDatagram datagram=_socket->receiveDatagram();
         QByteArray raw=datagram.data();
-        if(raw.isEmpty()){
+        if(raw.isEmpty() || raw.size()<12){
             continue;
         }
-        parseRtpPacket(reinterpret_cast<const uint8_t*>(raw.constData()),static_cast<size_t>(raw.size()));
+        const uint8_t* data=reinterpret_cast<const uint8_t*>(raw.constData());
+        uint8_t version=data[0]>>6;
+        if(version!=2){
+            continue;
+        }
+        uint8_t payloadType=data[1]&0x7F;
+        if(payloadType != RTP_PAYLOAD_TYPE){
+            continue;
+        }
+
+        uint16_t sequence=(static_cast<uint16_t>(data[2])<<8)|static_cast<uint16_t>(data[3]);
+        uint32_t ssrc=(static_cast<uint32_t>(data[8])<<24)|(static_cast<uint32_t>(data[9])<<16)|
+                     (static_cast<uint32_t>(data[10])<<8)|(static_cast<uint32_t>(data[11]));
+        if(_expectedSsrc!=0 &&ssrc != _expectedSsrc){
+            continue;
+        }
+
+        _jitterBuffer.push(sequence,raw);
 
     }
 

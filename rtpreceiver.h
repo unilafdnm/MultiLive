@@ -4,6 +4,8 @@
 #include <QObject>
 #include<QUdpSocket>
 #include<QByteArray>
+#include<QTimer>
+#include"rtpjitterbuffer.h"
 
 class RtpReceiver:public QObject
 {
@@ -35,6 +37,10 @@ private:
     quint32 _fuTimestamp=0;
     quint16 _expectedFuSequence=0;
     quint32 _expectSsrc{0};
+
+
+    Rtpjitterbuffer _jitterBuffer{nullptr};
+    QTimer _jitterTimer;
 
 signals:
     void h264NaluReady(QByteArray nalu,quint32 timestamp,bool market);

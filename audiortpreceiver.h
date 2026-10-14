@@ -6,16 +6,17 @@
 #include<cstdint>
 #include<functional>
 #include<vector>
-
-
-class AudioRtpReceiver
+#include<QTimer>
+#include<rtpjitterbuffer.h>
+#include<QObject>
+class AudioRtpReceiver:public QObject
 {
-
+    Q_OBJECT
 public:
     using AacCallback=std::function<void(std::vector<uint8_t>data,uint32_t timestamp)>;
 
 public:
-    AudioRtpReceiver();
+    AudioRtpReceiver(QObject* parent=nullptr);
     ~AudioRtpReceiver();
 
     bool open(uint16_t port);
@@ -37,6 +38,9 @@ private:
     AacCallback _aacCallback;
     static constexpr uint8_t RTP_PAYLOAD_TYPE=97;
     uint32_t _expectedSsrc{0};
+
+    Rtpjitterbuffer _jitterBuffer{nullptr};
+    QTimer _jitterTimer;
 
 };
 
